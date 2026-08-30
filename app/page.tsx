@@ -8,6 +8,7 @@ const ACTIVITY_STEPS: { id: ActivityStep; label: string }[] = [
   { id: "reading", label: "Reading transcript" },
   { id: "extracting", label: "Extracting decisions" },
   { id: "delegating", label: "Delegating action-item analysis" },
+  { id: "researching", label: "Researching company with Bright Data" },  
   { id: "generating", label: "Generating follow-up" },
   { id: "approval", label: "Waiting for human approval" },
 ];
@@ -32,6 +33,7 @@ function parseSseChunk(buffer: string): { events: AnalyzeStreamEvent[]; rest: st
 
 export default function Home() {
   const [transcript, setTranscript] = useState("");
+  const [companyUrl, setCompanyUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<MeetingAnalysis | null>(null);
@@ -70,7 +72,7 @@ export default function Home() {
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript }),
+        body: JSON.stringify({ transcript, companyUrl  }),
       });
 
       if (!response.ok || !response.body) {
@@ -186,7 +188,14 @@ export default function Home() {
                 Load Demo Transcript
               </button>
             </div>
-            <textarea
+            <input
+  		type="url"
+  		value={companyUrl}
+  		onChange={(event) => setCompanyUrl(event.target.value)}
+  		placeholder="Company website (e.g. https://stripe.com)"
+  		className="mb-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none ring-indigo-500 placeholder:text-slate-400 focus:bg-white focus:ring-2"
+	    />
+	    <textarea
               value={transcript}
               onChange={(event) => setTranscript(event.target.value)}
               placeholder="Paste your meeting transcript here..."
@@ -347,7 +356,7 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="mt-5 border-t border-slate-200 pt-5">
+              <div className="mt-5 border-t border-slawte-200 pt-5">
                 <h4 className="text-sm font-semibold text-slate-900">Human Approval Required</h4>
                 {approval === "approved" ? (
                   <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">

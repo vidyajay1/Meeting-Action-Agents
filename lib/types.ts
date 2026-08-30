@@ -20,6 +20,7 @@ export type ActivityStep =
   | "reading"
   | "extracting"
   | "delegating"
+  | "researching"
   | "generating"
   | "approval";
 

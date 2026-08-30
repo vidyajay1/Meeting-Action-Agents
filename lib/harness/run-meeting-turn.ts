@@ -1,5 +1,8 @@
 import { createSession, getSession, updateSession } from "../session-store";
+import { scrapeWithBrightData } from "../brightdata";
+
 import type { AnalyzeStreamEvent, MeetingAnalysis } from "../types";
+
 import { runFollowUpWriter, runMeetingAnalyst } from "./subagents";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -15,6 +18,7 @@ async function emit(
 export async function runAnalyzeTurn(
   transcript: string,
   onEvent: (event: AnalyzeStreamEvent) => void,
+  companyUrl?: string,
 ) {
   const session = createSession(transcript);
 
@@ -31,6 +35,7 @@ export async function runAnalyzeTurn(
   });
 
   const analystThreadId = crypto.randomUUID();
+
   await emit(onEvent, {
     type: "thread.created",
     threadId: analystThreadId,
@@ -51,6 +56,22 @@ export async function runAnalyzeTurn(
     title: "Meeting Analyst",
   });
 
+  let companyResearch = "";
+
+  if (companyUrl) {
+    await emit(onEvent, {
+      type: "activity",
+      step: "researching",
+      label: "Researching company with Bright Data",
+    });
+
+    try {
+      companyResearch = await scrapeWithBrightData(companyUrl);
+    } catch (error) {
+      console.error("Bright Data research failed:", error);
+    }
+  }
+
   await emit(onEvent, {
     type: "activity",
     step: "generating",
@@ -58,13 +79,24 @@ export async function runAnalyzeTurn(
   });
 
   const writerThreadId = crypto.randomUUID();
+
   await emit(onEvent, {
     type: "thread.created",
     threadId: writerThreadId,
     title: "Follow-up Writer",
   });
 
-  const followUpEmail = await runFollowUpWriter(transcript, extracted);
+  const researchContext = companyResearch
+    ? `
+
+COMPANY RESEARCH FROM BRIGHT DATA:
+${companyResearch.slice(0, 12000)}`
+    : "";
+
+  const followUpEmail = await runFollowUpWriter(
+    transcript + researchContext,
+    extracted,
+  );
 
   await emit(onEvent, {
     type: "thread.done",
@@ -78,6 +110,7 @@ export async function runAnalyzeTurn(
   };
 
   const toolCallId = crypto.randomUUID();
+
   updateSession(session.id, {
     analysis,
     toolCallId,
@@ -85,7 +118,11 @@ export async function runAnalyzeTurn(
     approvalStatus: "pending",
   });
 
-  onEvent({ type: "result", sessionId: session.id, analysis });
+  onEvent({
+    type: "result",
+    sessionId: session.id,
+    analysis,
+  });
 
   await emit(onEvent, {
     type: "activity",
@@ -108,12 +145,15 @@ export function applyApproval(input: {
   followUpEmail?: MeetingAnalysis["followUpEmail"];
 }) {
   const session = getSession(input.sessionId);
+
   if (!session) {
     throw new Error("Session not found. Analyze the meeting again.");
   }
+
   if (session.toolCallId !== input.toolCallId) {
     throw new Error("This approval does not match the paused tool call.");
   }
+
   if (session.approvalStatus !== "pending") {
     throw new Error("This follow-up has already been decided.");
   }
@@ -130,7 +170,7 @@ export function applyApproval(input: {
   });
 
   return {
-    sessionId: session.id,
+    sessionId: input.sessionId,
     approvalStatus: updated!.approvalStatus,
     tool: "queue_follow_up_email",
     executed: false,
@@ -140,3 +180,5 @@ export function applyApproval(input: {
         : "Follow-up rejected. The gated send tool was not executed.",
   };
 }
+
+

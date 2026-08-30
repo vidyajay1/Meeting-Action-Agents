@@ -1,10 +1,12 @@
 import { runAnalyzeTurn } from "@/lib/harness/run-meeting-turn";
+
 import type { AnalyzeStreamEvent } from "@/lib/types";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  let body: { transcript?: string };
+  let body: { transcript?: string; companyUrl?: string };
+
   try {
     body = await request.json();
   } catch {
@@ -12,6 +14,8 @@ export async function POST(request: Request) {
   }
 
   const transcript = body.transcript?.trim();
+  const companyUrl = body.companyUrl?.trim();
+
   if (!transcript) {
     return Response.json(
       { error: "Paste a meeting transcript before analyzing." },
@@ -20,17 +24,23 @@ export async function POST(request: Request) {
   }
 
   const encoder = new TextEncoder();
+
   const stream = new ReadableStream({
     async start(controller) {
       const send = (event: AnalyzeStreamEvent) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
+        );
       };
 
       try {
-        await runAnalyzeTurn(transcript, send);
+        await runAnalyzeTurn(transcript, send, companyUrl);
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : "The agent failed to analyze this meeting.";
+          error instanceof Error
+            ? error.message
+            : "The agent failed to analyze this meeting.";
+
         send({ type: "error", message });
       } finally {
         controller.close();
@@ -46,3 +56,17 @@ export async function POST(request: Request) {
     },
   });
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
