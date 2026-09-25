@@ -30,6 +30,8 @@ export const DEMO_ANALYSIS: MeetingAnalysis = {
     "Who will monitor production after launch?",
     "Do we need a rollback plan?",
   ],
+  company: null,
+  companyError: null,
   followUpEmail: {
     subject: "Follow-up: Customer portal launch (Sept 15) and next Tuesday regroup",
     body: `Hi team,

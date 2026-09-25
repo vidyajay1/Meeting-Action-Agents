@@ -3,7 +3,7 @@ import { scrapeWithBrightData } from "../brightdata";
 
 import type { AnalyzeStreamEvent, MeetingAnalysis } from "../types";
 
-import { runFollowUpWriter, runMeetingAnalyst } from "./subagents";
+import { runFollowUpWriter, runMeetingAnalyst, summarizeCompany } from "./subagents";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -56,7 +56,8 @@ export async function runAnalyzeTurn(
     title: "Meeting Analyst",
   });
 
-  let companyResearch = "";
+  let company: MeetingAnalysis["company"] = null;
+  let companyError: string | null = null;
 
   if (companyUrl) {
     await emit(onEvent, {
@@ -66,8 +67,10 @@ export async function runAnalyzeTurn(
     });
 
     try {
-      companyResearch = await scrapeWithBrightData(companyUrl);
+      const companyResearch = await scrapeWithBrightData(companyUrl);
+      company = await summarizeCompany(companyResearch);
     } catch (error) {
+      companyError = error instanceof Error ? error.message : "Company research failed.";
       console.error("Bright Data research failed:", error);
     }
   }
@@ -86,17 +89,10 @@ export async function runAnalyzeTurn(
     title: "Follow-up Writer",
   });
 
-  const researchContext = companyResearch
-    ? `
-
-COMPANY RESEARCH FROM BRIGHT DATA:
-${companyResearch.slice(0, 12000)}`
-    : "";
-
-  const followUpEmail = await runFollowUpWriter(
-    transcript + researchContext,
-    extracted,
-  );
+  const followUpEmail = await runFollowUpWriter(transcript, {
+    ...extracted,
+    company,
+  });
 
   await emit(onEvent, {
     type: "thread.done",
@@ -106,6 +102,8 @@ ${companyResearch.slice(0, 12000)}`
 
   const analysis: MeetingAnalysis = {
     ...extracted,
+    company,
+    companyError,
     followUpEmail,
   };
 

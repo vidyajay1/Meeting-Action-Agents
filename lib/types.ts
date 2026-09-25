@@ -9,10 +9,17 @@ export type FollowUpEmail = {
   body: string;
 };
 
+export type CompanyProfile = {
+  name: string;
+  industry: string;
+};
+
 export type MeetingAnalysis = {
   decisions: string[];
   actionItems: ActionItem[];
   openQuestions: string[];
+  company: CompanyProfile | null;
+  companyError: string | null;
   followUpEmail: FollowUpEmail;
 };
 

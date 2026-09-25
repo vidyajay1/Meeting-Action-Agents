@@ -1,5 +1,5 @@
 import { getOpenAI, MODEL } from "../openai";
-import type { ActionItem, FollowUpEmail, MeetingAnalysis } from "../types";
+import type { ActionItem, CompanyProfile, FollowUpEmail, MeetingAnalysis } from "../types";
 import { DEMO_ANALYSIS, isDemoTranscript } from "./demo-fixture";
 
 function asString(value: unknown, fallback = "Not specified"): string {
@@ -88,9 +88,44 @@ If owner or deadline is missing, use "Not specified".`,
   };
 }
 
+export async function summarizeCompany(pageText: string): Promise<CompanyProfile> {
+  const openai = getOpenAI();
+  const completion = await openai.chat.completions.create({
+    model: MODEL,
+    temperature: 0,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: `You read text from a company website. Return strict JSON:
+{
+  "name": "company name",
+  "industry": "a few words, such as e-commerce or payments"
+}
+Use only what the page supports. If the name or industry is unclear, use "Not specified".`,
+      },
+      {
+        role: "user",
+        content: pageText.slice(0, 12000),
+      },
+    ],
+  });
+
+  const content = completion.choices[0]?.message?.content;
+  if (!content) {
+    throw new Error("Company summary returned an empty response.");
+  }
+
+  const parsed = parseJson(content) as Record<string, unknown>;
+  return {
+    name: asString(parsed.name),
+    industry: asString(parsed.industry),
+  };
+}
+
 export async function runFollowUpWriter(
   transcript: string,
-  analysis: Pick<MeetingAnalysis, "decisions" | "actionItems" | "openQuestions">,
+  analysis: Pick<MeetingAnalysis, "decisions" | "actionItems" | "openQuestions" | "company">,
 ): Promise<FollowUpEmail> {
   if (useFixture(transcript)) {
     return DEMO_ANALYSIS.followUpEmail;
@@ -110,7 +145,7 @@ Return strict JSON:
   "subject": "...",
   "body": "..."
 }
-Keep the body short: greeting, decisions, action items with owners/dates, open questions, and a closing. Do not invent facts.`,
+Keep the body short: greeting, decisions, action items with owners/dates, open questions, and a closing. If company name and industry are present, mention them in one opening sentence. Do not invent facts.`,
       },
       {
         role: "user",

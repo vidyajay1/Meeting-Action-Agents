@@ -83,6 +83,7 @@ export default function Home() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let researched = false;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -92,9 +93,16 @@ export default function Home() {
 
                         for (const event of parsed.events) {
           if (event.type === "activity") {
+            if (event.step === "researching") researched = true;
             const idx = ACTIVITY_STEPS.findIndex((step) => step.id === event.step);
             setCurrentStep(event.step);
-            setCompletedSteps(new Set(ACTIVITY_STEPS.slice(0, Math.max(idx, 0)).map((step) => step.id)));
+            setCompletedSteps(
+              new Set(
+                ACTIVITY_STEPS.slice(0, Math.max(idx, 0))
+                  .map((step) => step.id)
+                  .filter((id) => id !== "researching" || researched),
+              ),
+            );
           }
           if (event.type === "result") {
             setAnalysis(event.analysis);
@@ -106,7 +114,13 @@ export default function Home() {
             setSessionId(event.sessionId);
             setApproval("pending");
             setCurrentStep("approval");
-            setCompletedSteps(new Set(["reading", "extracting", "delegating", "generating"]));
+            setCompletedSteps(
+              new Set(
+                researched
+                  ? ["reading", "extracting", "delegating", "researching", "generating"]
+                  : ["reading", "extracting", "delegating", "generating"],
+              ),
+            );
           }
           if (event.type === "error") {
             throw new Error(event.message);
@@ -144,7 +158,11 @@ export default function Home() {
         setApproval("approved");
         setEditing(false);
         setConfirmNote(payload.message);
-        setCompletedSteps(new Set(["reading", "extracting", "delegating", "generating", "approval"]));
+        setCompletedSteps((prev) => {
+          const next = new Set(["reading", "extracting", "delegating", "generating", "approval"]);
+          if (prev.has("researching")) next.add("researching");
+          return next;
+        });
         setCurrentStep(null);
       } else {
         setApproval("rejected");
@@ -192,7 +210,7 @@ export default function Home() {
   		type="url"
   		value={companyUrl}
   		onChange={(event) => setCompanyUrl(event.target.value)}
-  		placeholder="Company website (e.g. https://stripe.com)"
+  		placeholder="Company website (e.g. https://www.airbnb.com)"
   		className="mb-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none ring-indigo-500 placeholder:text-slate-400 focus:bg-white focus:ring-2"
 	    />
 	    <textarea
@@ -260,6 +278,28 @@ export default function Home() {
 
         {analysis ? (
           <section className="grid gap-5 md:grid-cols-2">
+            {analysis.companyError ? (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 md:col-span-2">
+                Company research failed. {analysis.companyError}
+              </p>
+            ) : null}
+            {analysis.company ? (
+              <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-2">
+                <h3 className="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+                  Company
+                </h3>
+                <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                  <div>
+                    <dt className="text-slate-500">Name</dt>
+                    <dd className="mt-1 text-slate-800">{displayValue(analysis.company.name)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Industry</dt>
+                    <dd className="mt-1 text-slate-800">{displayValue(analysis.company.industry)}</dd>
+                  </div>
+                </dl>
+              </article>
+            ) : null}
             <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h3 className="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
                 Decisions
